@@ -20,16 +20,20 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json, os, urllib.request, urllib.error
           endpoint = 'https://allison-family-hq.mintim81.chatgpt.site/api/reminders/run'
           request = urllib.request.Request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=' + endpoint,
             headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
           with urllib.request.urlopen(request, timeout=20) as response:
             token = json.load(response)['value']
           print('::add-mask::' + token)
-          request = urllib.request.Request(endpoint, data=b'', method='POST', headers={'Authorization': 'Bearer ' + token})
-          with urllib.request.urlopen(request, timeout=45) as response:
-            result = json.load(response)
+          request = urllib.request.Request(endpoint, data=b'', method='POST', headers={'X-Family-Reminder-Token': token, 'User-Agent': 'AllisonFamilyReminder/1.0'})
+          try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+              result = json.load(response)
+          except urllib.error.HTTPError as error:
+            print('Calendar endpoint rejected request:', error.code)
+            raise SystemExit(1)
           if not result.get('ok'):
             raise SystemExit('Reminder check failed')
           print('Calendar reminder check completed')
