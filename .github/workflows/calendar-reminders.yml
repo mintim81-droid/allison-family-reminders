@@ -1,0 +1,36 @@
+name: Family calendar reminders
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/calendar-reminders.yml']
+permissions:
+  id-token: write
+concurrency:
+  group: family-calendar-reminders
+  cancel-in-progress: false
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check due calendar reminders
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          endpoint = 'https://allison-family-hq.mintim81.chatgpt.site/api/reminders/run'
+          request = urllib.request.Request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=' + endpoint,
+            headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(request, timeout=20) as response:
+            token = json.load(response)['value']
+          print('::add-mask::' + token)
+          request = urllib.request.Request(endpoint, data=b'', method='POST', headers={'Authorization': 'Bearer ' + token})
+          with urllib.request.urlopen(request, timeout=45) as response:
+            result = json.load(response)
+          if not result.get('ok'):
+            raise SystemExit('Reminder check failed')
+          print('Calendar reminder check completed')
+          PY
