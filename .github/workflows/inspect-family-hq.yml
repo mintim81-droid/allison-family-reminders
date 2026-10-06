@@ -1,0 +1,48 @@
+name: Inspect Family HQ API routes
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-family-hq.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Inspect public app assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://allison-family-hq.mintim81.chatgpt.site'
+          curl -fsSL "$base/" -o /tmp/index.html
+          echo '--- Script assets ---'
+          python3 - <<'PY'
+          import re
+          from urllib.parse import urljoin
+          html=open('/tmp/index.html', encoding='utf-8', errors='ignore').read()
+          base='https://allison-family-hq.mintim81.chatgpt.site/'
+          scripts=re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html)
+          for s in scripts:
+              print(urljoin(base,s))
+          PY
+          echo '--- API-like routes in HTML ---'
+          grep -Eo '/api/[A-Za-z0-9_?&=./:-]+' /tmp/index.html | sort -u || true
+          echo '--- API-like routes in JS ---'
+          python3 - <<'PY'
+          import re, subprocess
+          from urllib.parse import urljoin
+          html=open('/tmp/index.html', encoding='utf-8', errors='ignore').read()
+          base='https://allison-family-hq.mintim81.chatgpt.site/'
+          scripts=re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html)
+          routes=set()
+          for s in scripts:
+              url=urljoin(base,s)
+              try:
+                  data=subprocess.check_output(['curl','-fsSL',url], timeout=20).decode('utf-8','ignore')
+              except Exception:
+                  continue
+              routes.update(re.findall(r'/api/[A-Za-z0-9_?&=./:-]+', data))
+          for r in sorted(routes):
+              print(r)
+          PY
